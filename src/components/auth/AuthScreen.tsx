@@ -5,7 +5,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { useCasino } from '../../store/CasinoContext';
 import { sfx } from '../../utils/AudioEngine';
-import { Gem, Lock, Mail, User, Phone, Loader2 } from 'lucide-react';
+import { Gem, Lock, Mail, User, Phone, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthenticated }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
@@ -14,6 +14,7 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('+221 ');
+  const [showPassword, setShowPassword] = useState(false);
   
   const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [otpInput, setOtpInput] = useState('');
@@ -206,9 +207,14 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-                  <input type="password" required placeholder="Mot de passe" 
+                  <input type={showPassword ? "text" : "password"} required placeholder="Mot de passe" 
                     value={password} onChange={e => setPassword(e.target.value)}
-                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-4 px-4 pl-12 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" />
+                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-4 px-4 pl-12 pr-12 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
                 <button type="submit" disabled={isLoading} className="mt-6 w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-lg rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all transform hover:-translate-y-1 flex justify-center items-center disabled:opacity-50 disabled:hover:translate-y-0 relative overflow-hidden">
                   <div className="absolute inset-0 bg-white/20 hover:bg-transparent transition-colors"></div>
@@ -245,9 +251,14 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-                  <input type="password" required placeholder="Créer mot de passe" 
+                  <input type={showPassword ? "text" : "password"} required placeholder="Créer mot de passe" 
                     value={password} onChange={e => setPassword(e.target.value)}
-                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-4 px-4 pl-12 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" />
+                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-4 px-4 pl-12 pr-12 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
                 
                 <button type="submit" disabled={isLoading} className="mt-6 w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-lg rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all transform hover:-translate-y-1 flex justify-center items-center disabled:opacity-50 disabled:hover:translate-y-0 relative overflow-hidden">
