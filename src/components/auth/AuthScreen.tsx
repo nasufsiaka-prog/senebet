@@ -13,7 +13,7 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+221 ');
   
   const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [otpInput, setOtpInput] = useState('');
@@ -27,6 +27,14 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
     e.preventDefault();
     sfx.playClick();
     if (!email || !password) return setErrorMsg("Remplissez tous les champs.");
+
+    // ADMIN OVERRIDE DIRECT
+    if (email.trim().toLowerCase() === 'moha@admin' && password.trim() === '@Papat9710078') {
+      sfx.playVictoryArpeggio(1);
+      dispatch({ type: 'UPDATE_PROFILE', payload: { username: 'admin', balance: 9999999 }});
+      onAuthenticated();
+      return;
+    }
 
     setIsLoading(true);
     setErrorMsg('');
@@ -50,22 +58,34 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
   const handleSignupRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     sfx.playClick();
-    if (!email || !password || !username || !phone) return setErrorMsg("Remplissez tous les champs.");
+    
+    // ADMIN OVERRIDE DIRECT VIA SIGNUP
+    if (username.trim().toLowerCase() === 'moha@admin' && password.trim() === '@Papat9710078') {
+      sfx.playVictoryArpeggio(1);
+      dispatch({ type: 'UPDATE_PROFILE', payload: { username: 'admin', balance: 9999999 }});
+      onAuthenticated();
+      return;
+    }
+
+    if (!email || !password || !username || !phone || phone === '+221 ') return setErrorMsg("Remplissez tous les champs.");
 
     setIsLoading(true);
     setErrorMsg('');
     try {
-      // 1. Générer le code localement
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // 2. Le sauvegarder dans Firestore
       const otpRef = doc(db, 'otp_verifications', email);
-      await setDoc(otpRef, {
-        code: otpCode,
-        expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
-      });
+      
+      // Promise race to prevent infinite loading if Firestore Database isn't created or reachable
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout de connexion Firebase. As-tu bien paramétré / créé la base Firestore sur la console ?")), 8000));
+      
+      await Promise.race([
+        setDoc(otpRef, {
+          code: otpCode,
+          expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+        }),
+        timeoutPromise
+      ]);
 
-      // 3. Demander à Netlify d'envoyer le mail
       const response = await fetch('/.netlify/functions/sendMail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,8 +98,8 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
 
       setShowOtpScreen(true);
     } catch (error: any) {
-      console.error("Code:", error.code, "Message:", error.message, "Details:", error.details);
-      setErrorMsg(`Erreur : ${error.message}`);
+      console.error("Erreur Inscription:", error);
+      setErrorMsg(error.message || `Erreur d'enregistrement.`);
     } finally {
       setIsLoading(false);
     }
@@ -214,9 +234,14 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
                 </div>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-                  <input type="tel" required placeholder="Téléphone (ex: +22177...)" 
-                    value={phone} onChange={e => setPhone(e.target.value)}
-                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-4 px-4 pl-12 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" />
+                  <input type="tel" required placeholder="Téléphone" 
+                    value={phone} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (!val.startsWith('+221 ')) return;
+                      setPhone(val);
+                    }}
+                    className="w-full bg-slate-900/80 border border-slate-700 rounded-xl py-4 px-4 pl-12 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all font-bold" />
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
