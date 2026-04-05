@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode, useRef } from 'react';
 import { sfx } from '../utils/AudioEngine';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, addDoc, collection } from 'firebase/firestore';
 
 // --- Types & Interfaces Strictes ---
 export type ThemeType = 'dark' | 'cyberpunk' | 'gold';
@@ -258,6 +258,7 @@ const CasinoContext = createContext<{
 
 export const CasinoProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(userReducer, getInitialState());
+  const lastTxRef = useRef<string | null>(null);
 
   // Effet de Bord 1 : Synchro CSS THEME
   useEffect(() => {
@@ -278,6 +279,22 @@ export const CasinoProvider = ({ children }: { children: ReactNode }) => {
        }).catch(() => {}); // catch silent en cas de spam
     }
   }, [state.balance, state.xp, state.vipLevel, state.userId]);
+
+  // Effet de Bord 3 : Logs Transactions Business
+  useEffect(() => {
+    if (auth.currentUser && state.userId === auth.currentUser.uid && state.transactions.length > 0) {
+      const latestTx = state.transactions[0];
+      if (lastTxRef.current !== latestTx.id) {
+         lastTxRef.current = latestTx.id;
+         addDoc(collection(db, "users", auth.currentUser.uid, "transactions_logs"), {
+            ...latestTx,
+            amount: Number(latestTx.amount.toFixed(2)),
+            date: latestTx.date.toISOString(),
+            timestamp: new Date().toISOString()
+         }).catch(() => {});
+      }
+    }
+  }, [state.transactions, state.userId]);
 
   // Listener d'Authentification et de Firestore pour MAJ Temps Réel Administrateur
   useEffect(() => {

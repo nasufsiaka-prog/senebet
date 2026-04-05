@@ -12,6 +12,18 @@ interface UserData {
   balance: number;
   xp: number;
   vipLevel: string;
+  lastIp?: string;
+  lastLocation?: string;
+  createdAt?: string;
+}
+
+interface TransactionLog {
+  id: string;
+  type: string;
+  game: string;
+  amount: number;
+  date: string;
+  timestamp: string;
 }
 
 export const AdminDashboard: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -22,6 +34,11 @@ export const AdminDashboard: React.FC<{ onClose: () => void }> = ({ onClose }) =
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBalance, setEditBalance] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Transactions Modal
+  const [historyUser, setHistoryUser] = useState<UserData | null>(null);
+  const [transactions, setTransactions] = useState<TransactionLog[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -65,20 +82,39 @@ export const AdminDashboard: React.FC<{ onClose: () => void }> = ({ onClose }) =
     }
   };
 
+  const handleOpenHistory = async (user: UserData) => {
+    sfx.playClick();
+    setHistoryUser(user);
+    setLoadingHistory(true);
+    try {
+      const qSnap = await getDocs(collection(db, "users", user.uid, "transactions_logs"));
+      const txs: TransactionLog[] = [];
+      qSnap.forEach(d => txs.push(d.data() as TransactionLog));
+      // Trier du plus récent au plus ancien
+      txs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setTransactions(txs);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la récupération de l'historique.");
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   // Statistiques pour le God Mode
   const totalBalances = users.reduce((acc, u) => acc + u.balance, 0);
 
   return (
     <div className="fixed inset-0 bg-[#060913] z-50 overflow-y-auto no-scrollbar font-sans text-white animate-[popIn_0.3s_ease-out]">
       {/* HEADER ADMIN */}
-      <div className="sticky top-0 bg-slate-900/90 backdrop-blur-xl border-b border-rose-500/30 p-4 flex justify-between items-center z-20">
+      <div className="sticky top-0 bg-slate-900/90 backdrop-blur-xl border-b border-indigo-500/30 p-4 flex justify-between items-center z-20 shadow-lg">
          <div className="flex items-center gap-3">
-           <div className="p-2 bg-rose-500/20 rounded-xl border border-rose-500/50">
-             <ShieldAlert className="text-rose-500 w-6 h-6 animate-pulse" />
+           <div className="p-2 bg-indigo-500/20 rounded-xl border border-indigo-500/50">
+             <ShieldAlert className="text-indigo-400 w-6 h-6" />
            </div>
            <div>
-             <h1 className="text-lg font-black text-rose-500 tracking-[0.2em] uppercase">Control Panel</h1>
-             <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">God Mode — Accès Restreint</p>
+             <h1 className="text-lg font-black text-indigo-400 tracking-[0.2em] uppercase">Senebet Management Center</h1>
+             <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Admin Access: Authorized</p>
            </div>
          </div>
          <button onClick={() => { sfx.playClick(); onClose(); }} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700">
@@ -100,12 +136,12 @@ export const AdminDashboard: React.FC<{ onClose: () => void }> = ({ onClose }) =
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Passif Global (FCFA)</h3>
                 <p className="text-3xl font-black text-emerald-400">{totalBalances.toLocaleString('fr-FR')}</p>
             </div>
-            <div className="bg-slate-800/50 border border-rose-500/30 rounded-2xl p-5 relative overflow-hidden shadow-[0_0_20px_rgba(244,63,94,0.1)]">
-                <div className="absolute top-0 right-0 p-4 opacity-10"><Activity className="w-16 h-16 text-rose-500"/></div>
-                <h3 className="text-sm font-bold text-rose-400 uppercase tracking-widest mb-1">Statut Système</h3>
-                <p className="text-xl font-black text-rose-500 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                  EN LIGNE
+            <div className="bg-slate-800/50 border border-indigo-500/30 rounded-2xl p-5 relative overflow-hidden shadow-[0_0_20px_rgba(99,102,241,0.1)]">
+                <div className="absolute top-0 right-0 p-4 opacity-10"><Activity className="w-16 h-16 text-indigo-400"/></div>
+                <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest mb-1">Statut Serveur</h3>
+                <p className="text-xl font-black text-indigo-500 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                  CONNECTÉ
                 </p>
             </div>
          </div>
@@ -122,9 +158,9 @@ export const AdminDashboard: React.FC<{ onClose: () => void }> = ({ onClose }) =
                  <thead>
                     <tr className="bg-slate-900/50 text-[10px] uppercase tracking-widest text-slate-400 font-bold border-b border-slate-700">
                        <th className="p-4 py-3">Joueur</th>
-                       <th className="p-4 py-3 hidden sm:table-cell">Contact</th>
+                       <th className="p-4 py-3 hidden sm:table-cell">Contact & IP</th>
                        <th className="p-4 py-3">Solde (FCFA)</th>
-                       <th className="p-4 py-3 text-right">Actions</th>
+                       <th className="p-4 py-3 text-right">Actions B2B</th>
                     </tr>
                  </thead>
                  <tbody className="text-sm divide-y divide-slate-700/50">
@@ -155,21 +191,23 @@ export const AdminDashboard: React.FC<{ onClose: () => void }> = ({ onClose }) =
                                     <span className="text-emerald-400">{user.balance.toLocaleString('fr-FR')}</span>
                                 )}
                             </td>
-                            <td className="p-4 text-right space-x-2">
-                                {editingId === user.uid ? (
-                                    <button onClick={() => handleSaveBalance(user.uid)} disabled={isSaving} className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-900 rounded-lg text-xs font-bold transition-colors">
-                                        {isSaving ? '...' : 'Sauvegarder'}
-                                    </button>
-                                ) : (
-                                    <>
-                                      <button onClick={() => alert("L'historique des parties n'est pas encore synchronisé pour " + user.username)} className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition-colors hidden sm:inline-block">
-                                        <History className="w-4 h-4" />
+                            <td className="p-4">
+                                <div className="flex justify-end gap-2 items-center">
+                                  {editingId === user.uid ? (
+                                      <button onClick={() => handleSaveBalance(user.uid)} disabled={isSaving} className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-900 rounded-lg text-xs font-bold transition-colors">
+                                          {isSaving ? '...' : 'Sauvegarder'}
                                       </button>
-                                      <button onClick={() => handleEditClick(user)} className="px-3 py-1.5 bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-slate-900 rounded-lg text-xs font-bold transition-colors">
-                                          Éditer Solde
-                                      </button>
-                                    </>
-                                )}
+                                  ) : (
+                                      <>
+                                        <button onClick={() => handleOpenHistory(user)} className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500 hover:text-white text-indigo-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1">
+                                          <History className="w-3 h-3" /> Logs
+                                        </button>
+                                        <button onClick={() => handleEditClick(user)} className="px-3 py-1.5 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-slate-900 rounded-lg text-xs font-bold transition-colors">
+                                            Modifier Solde
+                                        </button>
+                                      </>
+                                  )}
+                                </div>
                             </td>
                          </tr>
                        ))

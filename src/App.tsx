@@ -264,7 +264,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0f1a] text-white font-sans flex flex-col relative overflow-hidden">
+    <div className="h-screen bg-[#0a0f1a] text-white font-sans flex flex-col relative overflow-hidden">
       {/* Subtle background glow */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none"></div>
@@ -277,10 +277,12 @@ const AppContent: React.FC = () => {
       />
 
       {/* Main content area */}
-      {currentTab === 'game' && (
-        activeGame ? renderGame() : <GameHub onSelectGame={handleSelectGame} />
-      )}
-      {currentTab === 'profile' && <ProfileView />}
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
+        {currentTab === 'game' && (
+          activeGame ? renderGame() : <GameHub onSelectGame={handleSelectGame} />
+        )}
+        {currentTab === 'profile' && <ProfileView />}
+      </div>
 
       {/* Bottom Navigation */}
       <BottomNav

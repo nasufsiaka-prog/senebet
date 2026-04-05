@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { useCasino } from '../../store/CasinoContext';
 import { sfx } from '../../utils/AudioEngine';
@@ -40,7 +40,24 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
     setIsLoading(true);
     setErrorMsg('');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Capture IP silently on Login
+      let ipData = { ip: 'Unknown', country_name: 'Unknown', city: 'Unknown' };
+      try {
+        const ipRes = await fetch('https://ipapi.co/json/');
+        ipData = await ipRes.json();
+      } catch (e) {}
+
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          lastIp: ipData.ip,
+          lastLocation: `${ipData.country_name} (${ipData.city})`,
+          lastLogin: new Date().toISOString()
+        });
+      } catch (e) {}
+
       sfx.playVictoryArpeggio(1);
       dispatch({ type: 'UPDATE_PROFILE', payload: { username: email.split('@')[0] }});
       onAuthenticated();
@@ -128,15 +145,24 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // Capturer l'empreinte IP/Localisation
+      let ipData = { ip: 'Unknown', country_name: 'Unknown', city: 'Unknown' };
+      try {
+        const ipRes = await fetch('https://ipapi.co/json/');
+        ipData = await ipRes.json();
+      } catch (e) {}
+
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         username,
         email,
         phone,
-        balance: 100000,
+        balance: 100000, // Capital de départ !!
         vipLevel: 'BRONZE',
         xp: 0,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        lastIp: ipData.ip,
+        lastLocation: `${ipData.country_name} (${ipData.city})`
       });
 
       sfx.playVictoryArpeggio(1);
@@ -243,7 +269,7 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
                   <input type="tel" required placeholder="Téléphone" 
                     value={phone} 
                     onChange={e => {
-                      const val = e.target.value;
+                      let val = e.target.value.replace(/[^\d+ ]/g, ''); // Uniquement chiifres, + et espaces
                       if (!val.startsWith('+221 ')) return;
                       setPhone(val);
                     }}

@@ -1,325 +1,316 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bird, Skull, ChevronUp, DollarSign, History } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { Bird, Skull, DollarSign, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useCasino } from '../../store/CasinoContext';
 import { sfx } from '../../utils/AudioEngine';
 
-// --- Mathématiques & Constantes ---
-const ROWS = 10;
-const COLS = 5;
+// Configuration de la Difficulté
+type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Hardcore';
 
-// Multiplicateur qui augmente à chaque ligne franchie avec succès
-// Les probabilités : 4 chances sur 5 de passer par ligne
-const calculateMultiplier = (step: number): number => {
-  if (step === 0) return 1.00;
-  
+interface DiffConfig {
+  label: Difficulty;
+  chanceSafe: number; // Probabilité de survie par saut (0-1)
+  baseMult: number;   // Multiplicateur de départ
+}
+
+const DIFFICULTIES: Record<Difficulty, DiffConfig> = {
+  'Easy': { label: 'Easy', chanceSafe: 0.85, baseMult: 1.15 },
+  'Medium': { label: 'Medium', chanceSafe: 0.70, baseMult: 1.40 },
+  'Hard': { label: 'Hard', chanceSafe: 0.50, baseMult: 1.95 },
+  'Hardcore': { label: 'Hardcore', chanceSafe: 0.33, baseMult: 2.95 }
+};
+
+const TOTAL_LANES = 10;
+
+// Génère la courbe de gains selon la difficulté
+const getMultiplierForLane = (lane: number, diff: Difficulty) => {
+  if (lane === 0) return 1.00;
+  const config = DIFFICULTIES[diff];
+  // Calcul mathématique avec avantage maison (1%)
   let probability = 1;
-  const safeSpots = 4; // 1 bombe par ligne
-  
-  for (let i = 0; i < step; i++) {
-    probability *= (safeSpots / COLS);
+  for (let i = 0; i < lane; i++) {
+    probability *= config.chanceSafe;
   }
-  
-  const houseEdge = 0.01;
-  const mult = (1 - houseEdge) / probability;
-  return parseFloat(mult.toFixed(2));
+  return parseFloat(((1 - 0.01) / probability).toFixed(2));
 };
 
 type GameState = 'idle' | 'playing' | 'cashed_out' | 'dead';
-type RowState = 'locked' | 'active' | 'passed';
-
-interface TileData {
-    isMine: boolean;
-    isRevealed: boolean;
-    isPath: boolean; // Le choix du joueur
-}
 
 export const ChickenGame: React.FC = () => {
     const { state, dispatch } = useCasino();
-
+    
+    const [difficulty, setDifficulty] = useState<Difficulty>('Easy');
     const [betAmount, setBetAmount] = useState<number>(1000);
     const [gameState, setGameState] = useState<GameState>('idle');
-    const [currentStep, setCurrentStep] = useState(0); // 0 to ROWS
-    const [profit, setProfit] = useState(0);
+    const [currentLane, setCurrentLane] = useState(0); // 0 = Ligne de départ, MAX = TOTAL_LANES
+    const [isAnimating, setIsAnimating] = useState(false);
 
-    // Structure de la Grille : Array de ROWS, contenant chacune COLS tuiles
-    const [grid, setGrid] = useState<TileData[][]>([]);
-    const activeRowRef = useRef<HTMLDivElement>(null);
+    const currentMultiplier = currentLane === 0 ? 1.00 : getMultiplierForLane(currentLane, difficulty);
+    const nextMultiplier = getMultiplierForLane(currentLane + 1, difficulty);
+    const potentialWin = betAmount * currentMultiplier;
 
-    const currentMultiplier = currentStep > 0 ? calculateMultiplier(currentStep) : 1.00;
-    const nextMultiplier = calculateMultiplier(currentStep + 1);
-
+    // Reset à la fin
     useEffect(() => {
         if (gameState === 'idle') {
-            const initialGrid: TileData[][] = Array(ROWS).fill(null).map(() => 
-                Array(COLS).fill(null).map(() => ({
-                    isMine: false,
-                    isRevealed: false,
-                    isPath: false
-                }))
-            );
-            setGrid(initialGrid);
-            setCurrentStep(0);
-            setProfit(0);
+            setCurrentLane(0);
         }
     }, [gameState]);
 
-    // Auto-scroll camera
-    useEffect(() => {
-        if (activeRowRef.current) {
-            activeRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    }, [currentStep, gameState]);
-
     const startGame = () => {
-        if (state.balance < betAmount || betAmount < 200) {
-            sfx.playClick();
-            return;
-        }
-
-        sfx.playCoin();
+        if (state.balance < betAmount || betAmount < 100) return sfx.playClick();
+        
+        sfx.playHover();
         dispatch({ type: 'BET', payload: { amount: betAmount, game: 'Chicken Cross' } });
-
-        // Génération de la "Mine" pour chaque ligne
-        const newGrid: TileData[][] = Array(ROWS).fill(null).map(() => {
-            const row = Array(COLS).fill(null).map(() => ({ isMine: false, isRevealed: false, isPath: false }));
-            // Place 1 mine per row
-            const mineIndex = Math.floor(Math.random() * COLS);
-            row[mineIndex].isMine = true;
-            return row;
-        });
-
-        setGrid(newGrid);
         setGameState('playing');
-        setCurrentStep(0);
-        setProfit(betAmount);
+        setCurrentLane(0);
     };
 
-    const handleTileClick = (rowIndex: number, colIndex: number) => {
-        // Le joueur ne peut cliquer que sur la ligne active actuelle
-        if (gameState !== 'playing' || rowIndex !== currentStep) return;
+    const handleGo = async () => {
+        if (gameState !== 'playing' || isAnimating) return;
+        setIsAnimating(true);
+        sfx.playClick();
 
-        const newGrid = [...grid];
-        const tile = newGrid[rowIndex][colIndex];
+        // Pause dramatique
+        await new Promise(r => setTimeout(r, 600));
 
-        tile.isRevealed = true;
-        tile.isPath = true; // C'est le chemin choisi par le joueur
-
-        if (tile.isMine) {
-            // PERDU - SQUASHED
-            sfx.playExplosion('light');
-            setGameState('dead');
+        const config = DIFFICULTIES[difficulty];
+        const random = Math.random();
+        
+        if (random <= config.chanceSafe) {
+            // SURVIE
+            sfx.playCoin();
+            setCurrentLane(prev => prev + 1);
+            setIsAnimating(false);
             
-            // Révéler le reste du plateau pour frustration
-            newGrid.forEach(row => {
-                row.forEach(t => { t.isRevealed = true; });
-            });
-            setGrid(newGrid);
-
-            const container = document.getElementById('chicken-container');
-            if (container) {
-                container.classList.add('animate-shake');
-                setTimeout(() => container.classList.remove('animate-shake'), 400);
+            // Si on atteint le max, on force le cashout
+            if (currentLane + 1 === TOTAL_LANES) {
+               handleCashOut(currentLane + 1);
             }
-
         } else {
-            // SAFE
-            const step = currentStep + 1;
-            setCurrentStep(step);
-            setGrid(newGrid);
-            setProfit(betAmount * calculateMultiplier(step));
-            
-            sfx.playTension(step, step === ROWS);
-
-            if (step >= ROWS) {
-                // VICTOIRE TOTALE
-                setTimeout(cashOut, 300);
-            }
+            // EXPLOSION
+            sfx.playExplosion();
+            setGameState('dead');
+            setIsAnimating(false);
         }
     };
 
-    const cashOut = () => {
-        if (gameState !== 'playing' || currentStep === 0) return;
+    const handleCashOut = (forcedLane?: number) => {
+        if (gameState !== 'playing') return;
         
-        sfx.playVictoryArpeggio(currentMultiplier);
+        const lane = forcedLane ?? currentLane;
+        if (lane === 0) return; // Impossible d'encaisser avant le 1er saut
+
+        const mult = getMultiplierForLane(lane, difficulty);
+        const winAmount = betAmount * mult;
         
-        // Révéler les mines par transparence
-        setGrid(prev => prev.map(row => row.map(t => ({ ...t, isRevealed: true })))); 
-        
-        const finalProfit = betAmount * currentMultiplier;
-        dispatch({ type: 'WIN', payload: { amount: finalProfit, game: 'Chicken Cross', multiplier: currentMultiplier } });
-        
-        setProfit(finalProfit);
+        dispatch({ type: 'WIN', payload: { amount: winAmount, multiplier: mult, game: 'Chicken Cross' } });
         setGameState('cashed_out');
     };
 
-
+    // Rendu Visuel
     return (
-        <div id="chicken-container" className="w-full h-full flex flex-col md:flex-row gap-4 p-2 relative">
-            
-            {/* Visual Flashes */}
-            <div id="chicken-flash-overlay" className={`absolute inset-0 pointer-events-none z-[100] rounded-3xl transition-all duration-300 ${gameState === 'dead' ? 'bg-red-900/40 mix-blend-color-burn' : gameState === 'cashed_out' ? 'bg-casino-success/20 animate-cashout-flash' : 'bg-transparent'}`} />
+        <div className="w-full flex flex-col md:flex-row gap-6 p-4 max-w-7xl mx-auto h-full">
 
-            {/* --- PANEL LATERAL --- */}
-            <div className="w-full justify-between pb-8 md:w-80 flex flex-col gap-4 z-10 shrink-0">
-                <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 flex flex-col gap-4 shadow-lg">
-                    
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-700 mb-2">
-                         <Bird className="w-5 h-5 text-yellow-400" />
-                         <h3 className="text-slate-300 font-bold tracking-widest uppercase text-xs">Chicken</h3>
-                    </div>
+            {/* CONTROLES (GAUCHE MD, HAUT MOBILE) */}
+            <div className="w-full md:w-[350px] bg-slate-900/50 backdrop-blur-md rounded-3xl p-6 border border-slate-700/50 flex flex-col shadow-2xl shrink-0">
+               <h2 className="text-2xl font-black text-white italic tracking-wider mb-6 flex items-center gap-2">
+                 CHICKEN <span className="text-amber-500">ROAD</span>
+               </h2>
 
-                    <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
-                        <label className="flex justify-between text-sm font-bold text-slate-300 mb-3">
-                          <span>Mise (Min 200)</span><span className="text-emerald-500">FCFA</span>
-                        </label>
-                        <div className="flex items-center bg-slate-800 rounded-xl overflow-hidden border border-slate-600 focus-within:border-emerald-500">
-                            <input 
-                                type="number" min="200" value={betAmount || ''} onChange={(e) => setBetAmount(Number(e.target.value))}
-                                className="flex-1 bg-transparent border-none text-white font-black text-lg px-4 py-3 focus:outline-none w-full"
-                            />
-                            <div className="flex border-l border-slate-600">
-                                <button onClick={() => { sfx.playHover(); setBetAmount(Math.max(200, Math.floor(betAmount / 2))); }} className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-sm font-bold text-slate-300 transition-colors border-r border-slate-600">/2</button>
-                                <button onClick={() => { sfx.playHover(); setBetAmount(betAmount * 2); }} className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-sm font-bold text-slate-300 transition-colors">x2</button>
-                            </div>
+               <div className="space-y-6">
+                 {/* Mise */}
+                 <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Mise (FCFA)</label>
+                    <div className="flex bg-slate-950 rounded-xl p-1 border border-slate-800">
+                        <input
+                            type="number"
+                            value={betAmount}
+                            onChange={(e) => setBetAmount(Number(e.target.value))}
+                            disabled={gameState === 'playing'}
+                            className="bg-transparent text-white font-bold text-lg w-full px-4 outline-none disabled:opacity-50"
+                        />
+                        <div className="flex gap-1 p-1">
+                            {['½', '2x', 'MAX'].map((action) => (
+                                <button
+                                    key={action}
+                                    onClick={() => {
+                                        sfx.playClick();
+                                        if (action === '½') setBetAmount(Math.max(10, betAmount / 2));
+                                        if (action === '2x') setBetAmount(betAmount * 2);
+                                        if (action === 'MAX') setBetAmount(state.balance);
+                                    }}
+                                    disabled={gameState === 'playing'}
+                                    className="px-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-300 disabled:opacity-50 transition-colors"
+                                >
+                                    {action}
+                                </button>
+                            ))}
                         </div>
                     </div>
+                 </div>
 
-                    <button
-                        onClick={() => {
-                            if (gameState === 'idle' || gameState === 'cashed_out' || gameState === 'dead') startGame();
-                            else if (gameState === 'playing' && currentStep > 0) cashOut();
-                        }}
-                        disabled={gameState === 'playing' && currentStep === 0}
-                        className={`
-                            mt-2 w-full py-5 rounded-2xl font-black text-xl uppercase tracking-widest transition-all duration-300 relative overflow-hidden flex flex-col items-center group
-                            ${
-                                gameState === 'playing' && currentStep > 0
-                                    ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-yellow-900 border-2 border-yellow-300 shadow-[0_0_30px_rgba(250,204,21,0.6)] scale-105'
-                                    : gameState === 'playing' && currentStep === 0
-                                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed border border-slate-600'
-                                    : 'bg-gradient-to-r from-emerald-500 to-emerald-400 text-slate-900 shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_40px_rgba(16,185,129,0.6)]'
-                            }
-                        `}
-                    >   
-                        {gameState === 'idle' && 'Commencer'}
-                        {(gameState === 'cashed_out' || gameState === 'dead') && 'Rejouer'}
-                        {gameState === 'playing' && currentStep === 0 && 'Traversez...'}
-                        
-                        {gameState === 'playing' && currentStep > 0 && (
-                            <>
-                                <span className="text-[10px] opacity-80 mb-1 leading-none">Prendre les gains</span>
-                                <span className="text-2xl drop-shadow-md leading-none">
-                                    {new Intl.NumberFormat('fr-FR').format(profit)} F
-                                </span>
-                            </>
-                        )}
-                        {(gameState === 'playing' && currentStep > 0) && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:animate-sweep pointer-events-none" />}
-                    </button>
-                </div>
+                 {/* Difficulté */}
+                 <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block flex justify-between">
+                      Difficulté 
+                      <span className="text-rose-500">{(1 - DIFFICULTIES[difficulty].chanceSafe) * 100}% Chutes</span>
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                       {(Object.keys(DIFFICULTIES) as Difficulty[]).map(d => (
+                          <button
+                            key={d}
+                            onClick={() => setDifficulty(d)}
+                            disabled={gameState === 'playing'}
+                            className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${difficulty === d ? 'bg-amber-500 text-slate-900 border border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'} disabled:opacity-50`}
+                          >
+                            {d}
+                          </button>
+                       ))}
+                    </div>
+                 </div>
 
-                {/* HUD Data */}
-                <div className="bg-[#0b0c10] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 shadow-inner mt-4">
-                     <div className="flex justify-between items-center bg-white/5 rounded-lg py-2 px-3">
-                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Mult. Actuel</span>
-                        <span className="text-sm font-black text-white">{currentMultiplier.toFixed(2)}x</span>
-                     </div>
-                     <div className="flex justify-between items-center bg-white/5 rounded-lg py-2 px-3 relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-r from-casino-gold/0 via-casino-gold/10 to-casino-gold/0 animate-sweep" />
-                        <span className="text-xs text-casino-gold/80 font-bold uppercase tracking-wider">Prochain Mult.</span>
-                        <span className="text-sm font-black text-casino-gold text-glow-gold">{nextMultiplier.toFixed(2)}x</span>
-                     </div>
-                </div>
-
-            </div>
-
-            {/* --- GRILLE D'AVANCEMENT --- */}
-            <div className="flex-1 bg-slate-800/60 rounded-2xl border border-slate-700 relative flex flex-col items-center overflow-y-auto no-scrollbar py-4 px-2 sm:px-4 min-h-0">
-                
-                {/* Lignes d'arrivée (Visuel) */}
-                <div className="w-full max-w-lg mb-4 flex items-center justify-between text-casino-gold opacity-50 px-4">
-                    <History className="w-5 h-5"/>
-                    <span className="text-xs font-black tracking-widest uppercase text-glow-gold">Ligne d'arrivée (x{calculateMultiplier(ROWS).toFixed(2)})</span>
-                    <History className="w-5 h-5"/>
-                </div>
-
-                {/* La Route / Grille (Rendu à l'envers pour que le joueur monte) */}
-                <div className="w-full max-w-sm flex flex-col-reverse gap-1 sm:gap-1.5">
-                     {grid.map((row, rowIndex) => {
-                         const isRowActive = gameState === 'playing' && rowIndex === currentStep;
-                         const isRowPassed = rowIndex < currentStep;
-
-                         return (
-                            <div 
-                                key={rowIndex} 
-                                ref={isRowActive ? activeRowRef : null}
-                                className={`grid grid-cols-5 gap-1 sm:gap-1.5 transition-opacity duration-300 ${isRowPassed ? 'opacity-50' : rowIndex > currentStep && gameState === 'playing' ? 'opacity-30' : 'opacity-100'}`}
+                 {/* Action Principale */}
+                 <div className="pt-4 border-t border-slate-800">
+                    {gameState === 'idle' ? (
+                       <button
+                          onClick={startGame}
+                          disabled={betAmount > state.balance || betAmount <= 0}
+                          className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-900 rounded-xl font-black text-xl italic tracking-wider transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)] disabled:shadow-none"
+                       >
+                          START
+                       </button>
+                    ) : (
+                       <div className="flex gap-2">
+                          <button
+                            onClick={() => handleCashOut()}
+                            disabled={gameState !== 'playing' || currentLane === 0 || isAnimating}
+                            className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-900 rounded-xl font-black text-sm uppercase tracking-widest transition-all text-center leading-tight"
+                          >
+                             CASHOUT<br/>
+                             <span className="text-xl">{currentLane > 0 ? potentialWin.toLocaleString('fr-FR') : '---'}</span>
+                          </button>
+                          
+                          {gameState === 'playing' ? (
+                            <button
+                              onClick={handleGo}
+                              disabled={isAnimating}
+                              className={`flex-1 py-4 ${isAnimating ? 'bg-emerald-700 animate-pulse' : 'bg-emerald-500 hover:bg-emerald-400 hover:scale-[1.02]'} text-slate-900 rounded-xl font-black text-3xl italic transition-all shadow-[0_0_30px_rgba(16,185,129,0.4)] relative overflow-hidden`}
                             >
-                                {row.map((tile, colIndex) => {
+                               GO!
+                               {isAnimating && <div className="absolute inset-0 bg-white/20 animate-[shimmer_1s_infinite]"></div>}
+                            </button>
+                          ) : (
+                            <button
+                               onClick={() => setGameState('idle')}
+                               className="flex-1 py-4 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-black flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(99,102,241,0.4)]"
+                            >
+                               <RefreshCw className="w-5 h-5"/> REJOUER
+                            </button>
+                          )}
+                       </div>
+                    )}
+                 </div>
 
-                                    const isHoverable = isRowActive && !tile.isRevealed;
-                                    const isSafePath = isRowPassed && tile.isPath && !tile.isMine;
-                                    const isDeathPath = gameState === 'dead' && tile.isPath && tile.isMine;
-                                    const isNearMissMine = (gameState === 'dead' || gameState === 'cashed_out') && tile.isRevealed && tile.isMine && !tile.isPath;
-                                    const isNearMissSafe = (gameState === 'dead' || gameState === 'cashed_out') && tile.isRevealed && !tile.isMine && !tile.isPath;
-
-                                    return (
-                                        <motion.button
-                                            key={colIndex}
-                                            disabled={!isHoverable}
-                                            onClick={() => handleTileClick(rowIndex, colIndex)}
-                                            whileHover={isHoverable ? { y: -4, scale: 1.05 } : {}}
-                                            whileTap={isHoverable ? { scale: 0.95 } : {}}
-                                            className={`
-                                                relative aspect-square rounded-[20%] border-b-4 flex items-center justify-center transform-style-3d transition-all duration-300
-                                                ${isHoverable ? 'bg-[#222736] border-[#181c28] cursor-pointer hover:bg-[#2a2f42] hover:shadow-[0_0_15px_rgba(255,215,0,0.2)]' : 
-                                                  !tile.isRevealed ? 'bg-[#181c28] border-[#131620] opacity-50' : 'border-transparent'} // Base logic
-                                            `}
-                                        >
-                                            
-                                            {/* Actif Arrow Indicator */}
-                                            {isHoverable && (
-                                                <div className="absolute -bottom-4 animate-bounce text-casino-gold/50">
-                                                    <ChevronUp className="w-4 h-4" />
-                                                </div>
-                                            )}
-
-                                            {/* Révélation du tile */}
-                                            <AnimatePresence>
-                                                {tile.isRevealed && (
-                                                    <motion.div
-                                                        initial={{ rotateX: 90, opacity: 0 }}
-                                                        animate={{ rotateX: 0, opacity: 1 }}
-                                                        className={`absolute inset-0 rounded-[20%] flex items-center justify-center shadow-inner
-                                                            ${isDeathPath ? 'bg-red-500 border-2 border-red-900 shadow-[0_0_20px_rgba(239,68,68,0.8)]' :
-                                                              isNearMissMine ? 'bg-red-900/50 border border-red-500/30 opacity-70' :
-                                                              isSafePath ? 'bg-casino-gold border-2 border-yellow-700 shadow-[0_0_20px_rgba(255,215,0,0.5)] z-10' :
-                                                              isNearMissSafe ? 'bg-green-900/20 border border-green-500/20 opacity-30 shadow-none' :
-                                                              'bg-transparent'
-                                                            }
-                                                        `}
-                                                    >
-                                                        {isDeathPath || isNearMissMine ? (
-                                                            <Skull className={`w-8 h-8 md:w-10 md:h-10 ${isDeathPath ? 'text-black drop-shadow-md' : 'text-red-500/50'}`} />
-                                                        ) : isSafePath || isNearMissSafe ? (
-                                                            <Bird className={`w-8 h-8 md:w-10 md:h-10 ${isSafePath ? 'text-black drop-shadow-md animate-bounce' : 'text-green-500/50'}`} />
-                                                        ) : null}
-
-                                                        {/* Ligne tracée pour montrer le chemin du poulet */}
-                                                        {isSafePath && rowIndex > 0 && (
-                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-1.5 h-[150%] bg-casino-gold/50 blur-[1px] -z-10" />
-                                                        )}
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
-                                        </motion.button>
-                                    );
-                                })}
-                            </div>
-                         );
-                     })}
-                </div>
+               </div>
             </div>
+
+            {/* VISUELLE (DROITE MD, BAS MOBILE) */}
+            <div className={`flex-1 bg-slate-900/50 backdrop-blur-md rounded-3xl border ${gameState === 'dead' ? 'border-rose-500/50 bg-rose-950/20 shadow-[inset_0_0_100px_rgba(244,63,94,0.1)]' : 'border-slate-700/50 shadow-inner'} relative overflow-hidden flex items-end p-6 min-h-[400px] transition-all duration-500`}>
+               
+               {/* ANIMATION DE MORT (ECRAN ROUGE) */}
+               {gameState === 'dead' && (
+                  <div className="absolute inset-0 z-50 pointer-events-none animate-[ping_0.5s_cubic-bezier(0,0,0.2,1)_1] bg-rose-500/20 mix-blend-screen flex items-center justify-center">
+                    <Skull className="w-64 h-64 text-rose-500/50" />
+                  </div>
+               )}
+
+               {/* PISTE (ROAD) */}
+               <div className="w-full h-full relative overflow-x-auto no-scrollbar pb-8">
+                  <div className="flex items-end h-full min-w-max gap-4 pb-4">
+                     
+                     {/* Ligne Départ (0) */}
+                     <div className="w-24 h-full flex flex-col justify-end items-center relative gap-8">
+                        {currentLane === 0 && (
+                           <div className={`transition-all duration-300 z-20 ${gameState === 'dead' ? 'scale-0' : 'scale-100 bounce-animation'}`}>
+                             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,255,255,0.3)]">
+                               <Bird className="text-amber-500 w-10 h-10" />
+                             </div>
+                           </div>
+                        )}
+                        <div className="w-full text-center py-2 bg-slate-800 rounded-t-xl text-slate-500 border-t-2 border-slate-700 font-black text-sm uppercase">Départ</div>
+                     </div>
+
+                     {/* Lignes 1 à MAX */}
+                     {Array.from({ length: TOTAL_LANES }).map((_, i) => {
+                        const laneIndex = i + 1;
+                        const mult = getMultiplierForLane(laneIndex, difficulty);
+                        const isPassed = currentLane >= laneIndex;
+                        const isCurrent = currentLane === laneIndex;
+
+                        return (
+                          <div key={i} className="w-24 h-full flex flex-col justify-end items-center relative gap-4 group">
+                             
+                             {/* Couloir pointillé */}
+                             <div className="absolute inset-y-0 left-[50%] border-l-2 border-dashed border-slate-700/30 -z-10 group-hover:border-slate-500/30 transition-colors"></div>
+
+                             {/* Multiplicateur dans une bulle */}
+                             <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center font-black text-sm md:text-md transition-all z-10 
+                                ${isPassed ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]' : 
+                                  nextMultiplier === mult && gameState === 'playing' ? 'border-indigo-500 animate-pulse bg-indigo-500/10 text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 
+                                  'border-slate-700 bg-slate-800/80 text-slate-500'}`}>
+                                {mult}x
+                             </div>
+
+                             {/* Avatar du poulet */}
+                             <div className="h-20 flex items-end">
+                                {isCurrent && (
+                                  <div className={`transition-all duration-300 z-20 ${gameState === 'dead' ? 'scale-0' : 'scale-100 bounce-animation'}`}>
+                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(255,255,255,0.3)] ${gameState === 'cashed_out' ? 'bg-amber-400' : 'bg-white'}`}>
+                                      {gameState === 'cashed_out' ? <DollarSign className="text-slate-900 w-10 h-10" /> : <Bird className="text-amber-500 w-10 h-10" />}
+                                    </div>
+                                  </div>
+                                )}
+                             </div>
+
+                             {/* Base de la ligne */}
+                             <div className={`w-full py-2 rounded-t-xl border-t-2 text-center text-[10px] font-black tracking-widest uppercase transition-colors
+                                ${isPassed ? 'bg-emerald-950 border-emerald-500 text-emerald-500' : 'bg-slate-800 border-slate-700 text-slate-600'}`}>
+                               LANE {laneIndex}
+                             </div>
+                          </div>
+                        )
+                     })}
+                  </div>
+               </div>
+
+               {/* OVERLAY DE FIN */}
+               <AnimatePresence>
+                   {gameState === 'cashed_out' && (
+                       <div className="absolute inset-0 bg-emerald-500/20 backdrop-blur-sm z-40 flex flex-col items-center justify-center animate-[fadeIn_0.5s_ease-out]">
+                          <div className="bg-slate-900 p-8 rounded-3xl border border-emerald-500 shadow-[0_0_100px_rgba(16,185,129,0.4)] text-center scale-110">
+                              <h3 className="text-emerald-400 font-black text-2xl mb-2 italic">CASH OUT SUCCESS !</h3>
+                              <p className="text-white text-5xl font-black">{potentialWin.toLocaleString('fr-FR')} <span className="text-xl text-slate-400">FCFA</span></p>
+                              <p className="text-emerald-500/50 font-bold mt-2">Multiplicateur Final : {currentMultiplier}x</p>
+                          </div>
+                       </div>
+                   )}
+                   {gameState === 'dead' && (
+                       <div className="absolute inset-0 bg-rose-900/40 backdrop-blur-sm z-40 flex flex-col items-center justify-center animate-[fadeIn_0.5s_ease-out]">
+                          <div className="bg-slate-900 p-8 rounded-3xl border border-rose-500 shadow-[0_0_100px_rgba(244,63,94,0.4)] text-center scale-110">
+                              <AlertTriangle className="w-16 h-16 text-rose-500 mx-auto mb-4" />
+                              <h3 className="text-rose-500 font-black text-4xl mb-2 italic uppercase">Crash !</h3>
+                              <p className="text-rose-500/50 font-bold">Le poulet n'a pas survécu.</p>
+                          </div>
+                       </div>
+                   )}
+               </AnimatePresence>
+               
+            </div>
+
+            <style dangerouslySetInnerHTML={{__html: `
+              .bounce-animation { animation: chickenBounce 0.4s infinite alternate ease-in-out; }
+              @keyframes chickenBounce { from { transform: translateY(0) scaleY(0.95); } to { transform: translateY(-10px) scaleY(1.05); } }
+            `}} />
         </div>
     );
 };
