@@ -94,7 +94,7 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
       const otpRef = doc(db, 'otp_verifications', email);
       
       // Promise race to prevent infinite loading if Firestore Database isn't created or reachable
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout de connexion Firebase. As-tu bien paramétré / créé la base Firestore sur la console ?")), 8000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Connexion Firebase lente. Vérifie ta connexion internet et réessaie.")), 15000));
       
       await Promise.race([
         setDoc(otpRef, {

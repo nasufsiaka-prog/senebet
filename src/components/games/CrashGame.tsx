@@ -43,11 +43,10 @@ export const CrashGame: React.FC = () => {
     // Hash simulé (Normalement généré par Server Seed + Client Seed + Nonce)
     const h = crypto.getRandomValues(new Uint32Array(1))[0];
     
-    // Algorithme standard iGaming (1% House Edge instant crash x1.00)
-    if (h % 100 === 0) return 1.00;
+    // Algorithme iGaming : 5% chance d'instant crash x1.00 (House Edge agressif)
+    if (h % 20 === 0) return 1.00;
     
     const crashValue = Math.floor((100 * e - h) / (e - h)) / 100;
-    // Cap mathématique pour la démo
     return Math.min(crashValue, 1000.00); 
   }, []);
 
@@ -124,10 +123,9 @@ export const CrashGame: React.FC = () => {
     if (!startTimeRef.current) startTimeRef.current = time;
     const elapsedMs = time - startTimeRef.current;
     
-    // Algorithme de croissance : Le multiplier croît de 1.06 chaque seconde en logarithmique continu
-    // M = 1.00 * e^(0.06 * seconds)
+    // Algorithme de croissance RAPIDE : e^(0.18 * t) — 3x plus rapide
     const secondsElapsed = elapsedMs / 1000;
-    const currentMult = Math.pow(Math.E, 0.06 * secondsElapsed);
+    const currentMult = Math.pow(Math.E, 0.18 * secondsElapsed);
 
     currentMultValue.current = currentMult;
     if (multiplierTextRef.current) {
@@ -227,23 +225,27 @@ export const CrashGame: React.FC = () => {
     setMultiplier(finalMult);
     setEngineState('crashed');
     sfx.playExplosion('heavy');
-    drawGraph(finalMult); // Redraw graph un instant en ROUGE
+    drawGraph(finalMult);
     
     setHistory(prev => [parseFloat(finalMult.toFixed(2)), ...prev].slice(0, 8));
 
     if (playerState === 'betted') {
       setPlayerState('dead');
-      // Le Dispatch BET a déjà enlevé l'argent au début, donc pas d'event WIN
     }
 
-    // Trigger Screen Shake via classList au conteneur principal
+    // MASSIVE SCREEN SHAKE + RED FLASH
     const container = document.getElementById('crash-container');
     if (container) {
-      container.classList.add('animate-shake');
-      setTimeout(() => container.classList.remove('animate-shake'), 400);
+      container.style.animation = 'crashShake 0.5s cubic-bezier(.36,.07,.19,.97) both';
+      setTimeout(() => { container.style.animation = ''; }, 600);
+    }
+    const flash = document.getElementById('cashout-flash-overlay');
+    if (flash) {
+      flash.style.background = 'radial-gradient(circle, rgba(255,59,59,0.4) 0%, transparent 70%)';
+      flash.style.opacity = '1';
+      setTimeout(() => { flash.style.background = ''; flash.style.opacity = '0'; }, 800);
     }
 
-    // Auto Restart (Dans un vrai jeu, géré par le backend en continu)
     setTimeout(startBettingPhase, 3000);
   };
 
@@ -425,7 +427,7 @@ export const CrashGame: React.FC = () => {
       </div>
 
       {/* --- ZONE DU GRAPH ET DU MULTIPLICATEUR --- */}
-      <div className="flex-1 bg-slate-800/60 rounded-2xl border border-slate-700 relative flex flex-col overflow-hidden min-h-0">
+      <div className={`flex-1 rounded-2xl border relative flex flex-col overflow-hidden min-h-0 transition-all duration-500 ${engineState === 'crashed' ? 'bg-red-950/30 border-red-500/50 shadow-[inset_0_0_80px_rgba(255,59,59,0.15)]' : 'bg-slate-800/60 border-slate-700'}`}>
         
         {/* Header Historique */}
         <div className="absolute top-0 inset-x-0 h-10 bg-slate-900/80 border-b border-slate-700 px-4 flex items-center justify-between z-20">
@@ -466,14 +468,17 @@ export const CrashGame: React.FC = () => {
                   {currentMultValue.current.toFixed(2)}x
                 </motion.h2>
               ) : (
-                <motion.div key="crash" initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200 }} className="flex flex-col items-center">
-                  <h2 className="text-7xl md:text-[120px] font-black font-display text-[#FF3B3B] drop-shadow-[0_0_15px_rgba(255,59,59,0.5)] tracking-tighter select-none border-b-4 border-red-500 pb-2 mb-3">
-                    {multiplier.toFixed(2)}x
-                  </h2>
-                  <div className="flex items-center gap-2 text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-2 rounded-xl mb-2">
-                    <Skull className="w-5 h-5" /> CRASHED
+                <motion.div key="crash" initial={{ scale: 3, opacity: 0, rotate: -10 }} animate={{ scale: 1, opacity: 1, rotate: 0 }} transition={{ type: 'spring', damping: 10, stiffness: 180 }} className="flex flex-col items-center">
+                  <div className="relative">
+                    <h2 className="text-7xl md:text-[120px] font-black font-display text-[#FF3B3B] drop-shadow-[0_0_40px_rgba(255,59,59,0.8)] tracking-tighter select-none">
+                      {multiplier.toFixed(2)}x
+                    </h2>
+                    <div className="absolute -inset-8 bg-red-500/10 rounded-full blur-3xl animate-pulse pointer-events-none"></div>
                   </div>
-                  <p className="text-xs text-slate-500 animate-pulse">Prochain tour imminent...</p>
+                  <div className="flex items-center gap-3 text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/20 border border-red-500/40 px-6 py-3 rounded-2xl mt-4 shadow-[0_0_30px_rgba(255,59,59,0.3)]">
+                    <Skull className="w-6 h-6 animate-pulse" /> CRASHED
+                  </div>
+                  <p className="text-xs text-red-500/50 mt-3 font-bold uppercase tracking-widest">Prochain tour imminent...</p>
                 </motion.div>
               )}
             </AnimatePresence>
