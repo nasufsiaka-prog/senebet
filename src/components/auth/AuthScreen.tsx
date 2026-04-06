@@ -157,7 +157,7 @@ export const AuthScreen: React.FC<{ onAuthenticated: () => void }> = ({ onAuthen
         username,
         email,
         phone,
-        balance: 100000, // Capital de départ !!
+        balance: 0, // Vrai casino : pas de cadeau
         vipLevel: 'BRONZE',
         xp: 0,
         createdAt: new Date().toISOString(),

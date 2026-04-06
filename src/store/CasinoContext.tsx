@@ -86,7 +86,7 @@ const getInitialState = (): UserState => {
       parsed.transactions = parsed.transactions.map((tx: any) => ({ ...tx, date: new Date(tx.date) }));
       // Si le joueur est ruiné, on lui redonne des crédits de démo
       if (parsed.balance <= 0) {
-        parsed.balance = 100000;
+        parsed.balance = 0;
       }
       return parsed;
     } catch (e) {
@@ -97,7 +97,7 @@ const getInitialState = (): UserState => {
   return {
     userId: 'USR-' + generateHash().substring(0, 8).toUpperCase(),
     username: 'Joueur_Senebet',
-    balance: 100000, // 100 000 FCFA Offerts pour la démo
+    balance: 0, // Solde initial : 0 FCFA — vrai casino, pas de démo
     xp: 5000,
     vipLevel: 'Bronze',
     theme: 'dark',
