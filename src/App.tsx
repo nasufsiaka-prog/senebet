@@ -25,40 +25,53 @@ import { Gem, Wallet, Volume2, VolumeX, ShieldCheck,
 import { AdminDashboard } from './components/admin/AdminDashboard';
 
 // ============================================================
-// GAME HUB  — Grille d'accueil (inspiré SENEBET)
+// GAME HUB  — Premium Cyberpunk & Glassmorphism
 // ============================================================
 const GameHub: React.FC<{ onSelectGame: (id: string) => void }> = ({ onSelectGame }) => {
   const games = [
-    { id: 'crash',    name: 'Crash',    color: 'from-blue-500 to-indigo-700',    border: 'border-blue-500', icon: <Rocket className="w-10 h-10" /> },
-    { id: 'mines',    name: 'Mines',    color: 'from-emerald-500 to-green-700',  border: 'border-emerald-500', icon: <Gem className="w-10 h-10" /> },
-    { id: 'roulette', name: 'Roulette', color: 'from-red-500 to-red-800',        border: 'border-red-500', icon: <Crosshair className="w-10 h-10" /> },
-    { id: 'chicken',  name: 'Chicken',  color: 'from-yellow-400 to-amber-600',   border: 'border-yellow-500', icon: <span className="text-4xl">🐔</span> },
-    { id: 'thimbles', name: 'Thimbles', color: 'from-purple-500 to-purple-800',  border: 'border-purple-500', icon: <Box className="w-10 h-10" /> },
+    { id: 'crash',    name: 'Crash',    color: 'from-blue-600 to-indigo-900',    border: 'border-blue-500', icon: <Rocket className="w-12 h-12" />, desc: "Multiplier exponentiel" },
+    { id: 'mines',    name: 'Mines',    color: 'from-emerald-600 to-green-900',  border: 'border-emerald-500', icon: <Gem className="w-12 h-12" />, desc: "Désamorce le plateau" },
+    { id: 'roulette', name: 'Roulette', color: 'from-red-600 to-rose-900',        border: 'border-red-500', icon: <Crosshair className="w-12 h-12" />, desc: "La roue tourne" },
+    { id: 'chicken',  name: 'Chicken',  color: 'from-amber-500 to-orange-800',   border: 'border-amber-500', icon: <span className="text-5xl drop-shadow-[0_0_10px_rgba(251,191,36,0.6)]">🐔</span>, desc: "Traverse sans mourir" },
+    { id: 'thimbles', name: 'Thimbles', color: 'from-purple-600 to-fuchsia-900',  border: 'border-purple-500', icon: <Box className="w-12 h-12" />, desc: "Trouve la balle" },
   ];
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 animate-[popIn_0.3s_ease-out]">
-      <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-yellow-400 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
-        <Gem className="w-10 h-10 text-slate-900" />
+    <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 animate-[popIn_0.3s_ease-out] relative">
+      {/* Background Matrix/Nebula effect */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500 rounded-full mix-blend-screen filter blur-[100px] animate-pulse"></div>
+         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500 rounded-full mix-blend-screen filter blur-[100px] animate-[pulse_3s_ease-in-out_infinite]"></div>
       </div>
-      <h1 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-yellow-400 mb-2 text-center">
+
+      <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-yellow-500 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.5)] z-10 border border-emerald-400/50">
+        <Gem className="w-12 h-12 text-slate-900 drop-shadow-md" />
+      </div>
+      <h1 className="text-4xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-emerald-200 to-yellow-400 mb-2 text-center tracking-tighter drop-shadow-[0_0_15px_rgba(16,185,129,0.4)] z-10">
         SENEBET
       </h1>
-      <p className="text-slate-400 text-sm font-medium mb-8 text-center max-w-md">
-        Choisis ton jeu et tente ta chance. Équité cryptographiquement prouvée.
+      <p className="text-emerald-500/80 text-sm font-bold tracking-widest uppercase mb-12 text-center z-10 bg-slate-900/50 px-4 py-1 rounded-full border border-emerald-500/20">
+        ENTER THE MATRIX
       </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 w-full max-w-xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl z-10">
         {games.map(g => (
           <button
             key={g.id}
             onClick={() => { sfx.playClick(); onSelectGame(g.id); }}
-            className={`relative bg-slate-800/80 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center gap-3 border-2 border-slate-700 hover:${g.border} transition-all duration-300 group hover:shadow-lg hover:-translate-y-1 active:translate-y-0 active:scale-95`}
+            className={`relative bg-slate-900/40 backdrop-blur-xl rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center gap-4 border border-slate-700/50 hover:${g.border} transition-all duration-500 group hover:shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:-translate-y-2 overflow-hidden`}
           >
-            {/* Icon glow behind */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${g.color} opacity-0 group-hover:opacity-10 rounded-2xl transition-opacity duration-300`} />
-            <div className="text-white z-10">{g.icon}</div>
-            <span className="text-sm font-black uppercase tracking-widest text-slate-200 z-10">{g.name}</span>
+            {/* Glow sweep layer */}
+            <div className={`absolute inset-0 bg-gradient-to-b ${g.color} opacity-0 group-hover:opacity-20 transition-opacity duration-500`} />
+            
+            <div className={`text-slate-400 group-hover:text-white transition-colors duration-300 z-10 group-hover:scale-110 transform`}>
+               {g.icon}
+            </div>
+            
+            <div className="z-10 text-center">
+                <span className="block text-xl font-black uppercase tracking-widest text-slate-200 group-hover:text-white mb-1 drop-shadow-lg">{g.name}</span>
+                <span className="block text-xs font-bold text-slate-500 group-hover:text-amber-400/80 transition-colors uppercase tracking-wider">{g.desc}</span>
+            </div>
           </button>
         ))}
       </div>
@@ -101,8 +114,8 @@ const Header: React.FC<{
         </div>
         <h1 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-emerald-400 hidden sm:block">SENEBET</h1>
         {state.username?.toLowerCase() === 'admin' && (
-          <button onClick={onOpenAdmin} className="ml-2 px-3 py-1 bg-rose-500/20 text-rose-500 border border-rose-500/50 rounded-lg text-xs font-black tracking-widest uppercase flex items-center gap-1 hover:bg-rose-500 hover:text-white transition-colors">
-            <ShieldAlert className="w-4 h-4" /> God Mode
+          <button onClick={onOpenAdmin} className="ml-2 px-3 py-1 bg-amber-500/20 text-amber-500 border border-amber-500/50 rounded-lg text-xs font-black tracking-widest uppercase flex items-center gap-1 hover:bg-amber-500 hover:text-slate-900 transition-colors shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+            <ShieldAlert className="w-4 h-4" /> Securité B2B
           </button>
         )}
       </div>
